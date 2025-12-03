@@ -214,20 +214,120 @@ graph LR
 - **下游服务**: 订阅 `TopicResult` 获取处理结果（如 Java 画像服务）
 
 
-## 🛠️ 开发指南
+## 🧪 测试
+
+### 运行完整流程测试
+
+项目提供了一个完整的测试脚本，演示整个数据流程：
+
+```bash
+python tests/test_full_flow.py
+```
+
+**测试脚本功能：**
+
+1. **发送任务请求** - 通过 HTTP API 创建任务
+2. **查询任务状态** - 轮询 Redis 状态直到完成
+3. **从 MQ 获取结果** - 订阅 `TopicResult` 接收处理结果
+
+**示例输出：**
+
+```
+============================================================
+🧪 开始测试完整流程
+============================================================
+
+📤 步骤 1: 发送任务请求
+请求数据: {
+  "user_id": "test_user_001",
+  "content": "测试：智能手表降价通知"
+}
+✅ 任务已创建
+Task ID: 71f550aa-aa95-4d8a-bcc4-5b51352334e0
+
+🔍 步骤 2: 查询任务状态
+[1/10] 当前状态: running
+[2/10] 当前状态: running
+[3/10] 当前状态: done
+✅ 任务已完成
+
+� 步骤 3: 从 MQ 获取处理结果
+✅ 收到目标任务的结果消息！
+📊 处理结果:
+  - 标签: ['数码', '降价敏感']
+  - 评分: 95
+  - 原因: 用户关注了内容: 测试：智能手表降价通知
+
+============================================================
+🎉 测试完成
+============================================================
+```
+
+### 手动测试
+
+**1. 创建任务**
+
+```bash
+curl -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user123",
+    "content": "机械键盘降价了"
+  }'
+```
+
+**2. 查询状态**
+
+```bash
+curl http://localhost:8000/tasks/<task_id>
+```
+
+**3. 订阅结果 Topic (Java 示例)**
+
+```java
+import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
+import org.apache.rocketmq.client.consumer.listener.*;
+import org.apache.rocketmq.common.message.MessageExt;
+
+public class ResultConsumer {
+    public static void main(String[] args) throws Exception {
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("GID_JAVA_SERVICE");
+        consumer.setNamesrvAddr("127.0.0.1:9876");
+        consumer.subscribe("TopicResult", "*");
+        
+        consumer.registerMessageListener(new MessageListenerConcurrently() {
+            @Override
+            public ConsumeConcurrentlyStatus consumeMessage(
+                List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
+                for (MessageExt msg : msgs) {
+                    String body = new String(msg.getBody());
+                    System.out.println("收到结果: " + body);
+                    // 解析 JSON 并处理结果
+                }
+                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            }
+        });
+        
+        consumer.start();
+        System.out.println("Java 服务已启动，等待结果...");
+    }
+}
+```
+
+## �🛠️ 开发指南
 
 ### 添加新的业务逻辑
 
 修改 `worker/agent_logic.py` 中的 `core_agent_logic` 函数：
 
 ```python
-async def core_agent_logic(task_id: str, payload: str) -> None:
+async def core_agent_logic(task_id: str, payload: str) -> TaskResult:
     # 1. 状态检查
     # 2. 更新为 running
     # 3. 执行你的业务逻辑
     # 4. 生成结果
-    # 5. 存储结果并更新状态为 done
-    pass
+    # 5. 更新状态为 done 并返回结果
+    return TaskResult(...)
 ```
 
 ### 修改数据模型
