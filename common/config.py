@@ -18,6 +18,7 @@ class RocketMQConfig:
     ACCESS_KEY = os.getenv("MQ_ACCESS_KEY") or "User"
     SECRET_KEY = os.getenv("MQ_SECRET_KEY") or "Secret"
     TOPIC_REQUEST = os.getenv("MQ_TOPIC_REQUEST", "TopicTest")
+    TOPIC_RESULT = os.getenv("MQ_TOPIC_RESULT", "TopicResult")
     GROUP_AGENT = os.getenv("MQ_GROUP_AGENT", "GID_AGENT_PYTHON")
 
 

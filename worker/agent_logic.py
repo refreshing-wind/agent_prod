@@ -5,13 +5,16 @@ from common.redis_client import RedisClient
 from common.models import TaskResult
 
 
-async def core_agent_logic(task_id: str, payload: str) -> None:
+async def core_agent_logic(task_id: str, payload: str) -> TaskResult:
     """
     Core AI logic for processing tasks.
     
     Args:
         task_id: Unique task identifier
         payload: Task content to process
+        
+    Returns:
+        TaskResult: Processing result to be sent to MQ
     """
     redis_client = RedisClient.get_instance()
     
@@ -19,10 +22,10 @@ async def core_agent_logic(task_id: str, payload: str) -> None:
     status = await redis_client.get(f"task:{task_id}:status")
     if status == "canceled":
         print(f"    ⚠️ 任务 {task_id} 已取消，跳过执行")
-        return
+        return None
     if status == "done":
         print(f"    ⚠️ 任务 {task_id} 已完成，跳过(幂等)")
-        return
+        return None
 
     # 2. 更新状态为 Running
     await redis_client.set(f"task:{task_id}:status", "running", ex=3600)
@@ -39,10 +42,10 @@ async def core_agent_logic(task_id: str, payload: str) -> None:
         reason=f"用户关注了内容: {payload}"
     )
 
-    # 5. 存结果 & 更新状态为 Done
-    async with redis_client.pipeline() as pipe:
-        await pipe.set(f"task:{task_id}:result", result.model_dump_json(), ex=3600)
-        await pipe.set(f"task:{task_id}:status", "done", ex=3600)
-        await pipe.execute()
+    # 5. 更新状态为 Done (不存储结果到 Redis)
+    await redis_client.set(f"task:{task_id}:status", "done", ex=3600)
         
-    print(f"    ✅ [Agent] 任务 {task_id} 处理完毕，结果已存 Redis")
+    print(f"    ✅ [Agent] 任务 {task_id} 处理完毕")
+    
+    # 返回结果，由调用方发送到 MQ
+    return result

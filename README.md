@@ -69,12 +69,71 @@ REDIS_PORT=6379
 # RocketMQ 配置
 MQ_ENDPOINT=127.0.0.1:8081
 MQ_TOPIC_REQUEST=TopicTest
+MQ_TOPIC_RESULT=TopicResult
 MQ_GROUP_AGENT=GID_AGENT_PYTHON
 MQ_ACCESS_KEY=User
 MQ_SECRET_KEY=Secret
 ```
 
-### 4. 启动服务
+### 4. 配置 RocketMQ
+
+#### Topic 和 Consumer Group 的区别
+
+**Topic (主题)**
+- 消息的分类标签，类似于"邮箱地址"
+- Producer 发送消息到 Topic
+- Consumer 订阅 Topic 来接收消息
+- 一个 Topic 可以有多个 Consumer Group 订阅
+
+**Consumer Group (消费者组)**
+- 一组消费者的集合，共同消费同一个 Topic
+- 同一个 Group 内的多个 Consumer 会**负载均衡**消费消息（每条消息只被组内一个 Consumer 消费）
+- 不同 Group 的 Consumer 会**各自独立**消费所有消息（广播模式）
+
+**示例：**
+```
+TopicTest (请求 Topic)
+├── GID_AGENT_PYTHON (Worker 组) → Worker1, Worker2, Worker3 (负载均衡)
+└── GID_MONITOR (监控组) → Monitor1 (独立消费所有消息)
+
+TopicResult (结果 Topic)
+└── GID_JAVA_SERVICE (Java 服务组) → JavaService1, JavaService2 (负载均衡)
+```
+
+#### 创建 Topic 和 Consumer Group
+
+**方式 1: 使用 mqadmin 命令行工具**
+
+```bash
+# 如果在 Docker 中运行 RocketMQ
+docker exec -it <broker_container_id> bash
+cd /home/rocketmq/rocketmq-5.x.x/bin
+
+# 创建 Topic: TopicTest (请求 Topic)
+sh mqadmin updateTopic -n 127.0.0.1:9876 -c DefaultCluster -t TopicTest
+
+# 创建 Topic: TopicResult (结果 Topic)
+sh mqadmin updateTopic -n 127.0.0.1:9876 -c DefaultCluster -t TopicResult
+
+# 创建 Consumer Group: GID_AGENT_PYTHON
+sh mqadmin updateSubGroup -n 127.0.0.1:9876 -c DefaultCluster -g GID_AGENT_PYTHON
+```
+
+**方式 2: 使用 RocketMQ Dashboard (推荐)**
+
+1. 打开 Dashboard: `http://localhost:8080`
+2. 创建 Topic:
+   - 点击 **Topic** → **ADD/UPDATE**
+   - Cluster Name: `DefaultCluster`
+   - Topic Name: `TopicTest` 或 `TopicResult`
+   - Write Queue Nums: `16`
+   - Read Queue Nums: `16`
+3. 创建 Consumer Group:
+   - 点击 **Consumer** → **ADD/UPDATE**
+   - Cluster Name: `DefaultCluster`
+   - Consumer Group Name: `GID_AGENT_PYTHON`
+
+### 5. 启动服务
 
 **启动 API Server:**
 
@@ -124,29 +183,36 @@ curl http://localhost:8000/tasks/550e8400-e29b-41d4-a716-446655440000
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "done",
-  "result": {
-    "tags": ["数码", "降价敏感"],
-    "score": 95,
-    "reason": "用户关注了内容: 机械键盘降价了"
-  }
+  "result": null
 }
 ```
+
+> **注意**: 从 v2.0 开始，处理结果不再存储在 Redis 中，而是发送到 `TopicResult` 供下游服务消费。
 
 ## 🔄 数据流程
 
 ```mermaid
 graph LR
     A[客户端] -->|1. HTTP POST| B[API Server]
-    B -->|2. 写状态| C[(Redis)]
-    B -->|3. 发消息| D[RocketMQ]
+    B -->|2. 写状态 queued| C[(Redis)]
+    B -->|3. 发消息| D[RocketMQ<br/>TopicTest]
     D -->|4. 推送| E[Agent Worker]
-    E -->|5. 查状态| C
+    E -->|5. 更新状态 running| C
     E -->|6. 执行AI逻辑| F[AI 服务]
     F -->|7. 返回结果| E
-    E -->|8. 存结果| C
-    A -->|9. 轮询查询| B
-    B -->|10. 返回结果| A
+    E -->|8. 更新状态 done| C
+    E -->|9. 发送结果| G[RocketMQ<br/>TopicResult]
+    G -->|10. 推送| H[下游服务<br/>Java/其他]
+    A -->|11. 轮询查询状态| B
+    B -->|12. 返回状态| A
 ```
+
+**说明：**
+- **Redis**: 只存储任务状态 (`queued` → `running` → `done`)
+- **TopicTest**: 请求 Topic，API Server 发送任务到此
+- **TopicResult**: 结果 Topic，Worker 发送处理结果到此
+- **下游服务**: 订阅 `TopicResult` 获取处理结果（如 Java 画像服务）
+
 
 ## 🛠️ 开发指南
 

@@ -2,9 +2,10 @@
 import asyncio
 import json
 import signal
-from rocketmq import SimpleConsumer, ClientConfiguration, Credentials, FilterExpression
+from rocketmq import SimpleConsumer, Producer, Message, ClientConfiguration, Credentials, FilterExpression
 
 from common.config import Config
+from common.models import TaskMessage
 from worker.agent_logic import core_agent_logic
 from common.redis_client import RedisClient
 
@@ -15,6 +16,7 @@ class AgentService:
     def __init__(self):
         self._stop_event = asyncio.Event()
         self.consumer = None
+        self.producer = None
         self.redis_client = None
 
     async def start(self):
@@ -32,6 +34,7 @@ class AgentService:
             request_timeout=10
         )
 
+        # Initialize Consumer
         self.consumer = SimpleConsumer(
             client_configuration=client_config,
             consumer_group=Config.mq.GROUP_AGENT,
@@ -39,7 +42,11 @@ class AgentService:
             await_duration=20
         )
         
+        # Initialize Producer for sending results
+        self.producer = Producer(client_config)
+        
         self.consumer.startup()
+        self.producer.startup()
         print("✅ Agent Worker 已上线，正在等待任务... (按 Ctrl+C 回车后等待5秒停止)")
 
         # 注册信号处理
@@ -85,11 +92,26 @@ class AgentService:
             body = msg.body.decode('utf-8')
             data = json.loads(body)
             task_id = data.get('task_id')
+            user_id = data.get('user_id')
             
             print(f"\n📩 [MQ] 收到消息 TaskID: {task_id}")
             
-            # 执行业务逻辑
-            await core_agent_logic(task_id, data.get('payload'))
+            # 执行业务逻辑，获取结果
+            result = await core_agent_logic(task_id, data.get('payload'))
+            
+            # 如果有结果，发送到 MQ Result Topic
+            if result:
+                result_msg = Message()
+                result_msg.topic = Config.mq.TOPIC_RESULT
+                result_msg.body = json.dumps({
+                    "task_id": task_id,
+                    "user_id": user_id,
+                    "result": result.model_dump()
+                }).encode('utf-8')
+                result_msg.tag = "ProfileResult"
+                
+                self.producer.send(result_msg)
+                print(f"    📤 [MQ] 结果已发送到 {Config.mq.TOPIC_RESULT}")
             
             # 确认消息
             self.consumer.ack(msg)
@@ -108,6 +130,13 @@ class AgentService:
                 print("✅ Consumer 已关闭")
             except Exception as e:
                 print(f"❌ Consumer 关闭出错: {e}")
+        
+        if self.producer:
+            try:
+                self.producer.shutdown()
+                print("✅ Producer 已关闭")
+            except Exception as e:
+                print(f"❌ Producer 关闭出错: {e}")
         
         if self.redis_client:
             await self.redis_client.aclose()
