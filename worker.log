@@ -1,0 +1,26 @@
+DEBUG: LOG_FORMAT is: %(asctime)s - %(name)s - %(levelname)s - %(message)s
+2025-12-04 14:44:22 - app.services.proxy_agent - INFO - 🚀 Starting ProxyAgent with max_concurrent_tasks=10
+2025-12-04 14:44:22 - app.services.proxy_agent - INFO - ✅ ProxyAgent initialized successfully
+2025-12-04 14:44:22 - app.services.proxy_agent - INFO - ✅ ProxyAgent started, waiting for tasks... (Press Ctrl+C to stop)
+2025-12-04 14:44:22 - run_worker - WARNING - DEBUG: Waiting for stop signal...
+2025-12-04 14:44:22 - app.services.proxy_agent - INFO - Starting consumer loop...
+2025-12-04 14:44:52 - app.services.proxy_agent - INFO - 📥 Received 1 messages from RocketMQ
+2025-12-04 14:44:52 - app.services.proxy_agent - INFO - 📊 Task accepted (active=1/10)
+2025-12-04 14:44:52 - app.services.proxy_agent - INFO - 
+📩 [Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4] Received - Agent: mock_agent
+2025-12-04 14:44:52 - app.services.proxy_agent - INFO - [PERF] Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4 - Processing started
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - [PERF] Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4 - Agent execution: 3.002s
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - ✅ [Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4] Processing completed
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - [PERF] Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4 - RocketMQ send: 0.025s
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - 📤 [Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4] Result sent to TopicResult
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - [PERF] Task 06075e6a-83de-4d8c-a39f-a8b30a08d5b4 - TOTAL: 3.034s
+2025-12-04 14:44:55 - app.services.proxy_agent - INFO - 📊 Task slot released (active=0/10)
+DEBUG: Received signal 15
+2025-12-04 15:12:38 - run_worker - WARNING - DEBUG: Stop signal received!
+2025-12-04 15:12:38 - run_worker - WARNING - DEBUG: Entering finally block
+2025-12-04 15:12:38 - app.services.proxy_agent - INFO - 🛑 Shutting down ProxyAgent...
+2025-12-04 15:12:38 - app.services.proxy_agent - INFO - Consumer loop stopped
+2025-12-04 15:12:39 - app.services.proxy_agent - INFO - 🧹 Cleaning up resources...
+2025-12-04 15:12:39 - app.services.proxy_agent - INFO - ✅ MQ connections closed
+2025-12-04 15:12:39 - app.services.proxy_agent - INFO - ✅ Redis connection closed
+2025-12-04 15:12:39 - app.services.proxy_agent - INFO - 👋 ProxyAgent shutdown complete

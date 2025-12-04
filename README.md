@@ -361,6 +361,6 @@ class YourModel(BaseModel):
 lsof -ti:8000 | xargs kill -9
 ```
 
-## 📄 License
+## 结束进程的命令
 
-MIT
+pkill -f run_api && pkill -f run_worker
