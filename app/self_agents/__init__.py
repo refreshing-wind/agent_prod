@@ -1,7 +1,7 @@
 """Agent factory for creating agent instances."""
 from typing import Dict, Type
-from app.agents.base_agent import BaseAgent
-from app.agents.mock_agent import MockAgent
+from app.self_agents.base_agent import BaseAgent
+from app.self_agents.mock_agent import MockAgent
 
 
 # Agent registry

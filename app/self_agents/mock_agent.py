@@ -1,7 +1,7 @@
 """Mock Agent implementation for testing."""
 import asyncio
 from typing import Any, Dict
-from app.agents.base_agent import BaseAgent
+from app.self_agents.base_agent import BaseAgent
 from app.models.task import TaskResult
 
 

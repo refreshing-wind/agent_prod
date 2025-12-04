@@ -11,7 +11,7 @@ from rocketmq import SimpleConsumer, Producer, Message, FilterExpression
 from app.core.config import Config
 from app.services.redis_service import RedisClient
 from app.services.rocketmq_service import RocketMQService
-from app.agents import create_agent
+from app.self_agents import create_agent
 from app.core.logging import get_logger
 from app.models.task import TaskResult
 
