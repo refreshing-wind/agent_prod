@@ -196,13 +196,13 @@ graph LR
     A[客户端] -->|1. HTTP POST| B[API Server]
     B -->|2. 写状态 queued| C[(Redis)]
     B -->|3. 发消息| D[RocketMQ<br/>TopicTest]
-    D -->|4. 推送| E[Agent Worker]
+    E[Agent Worker] -->|4. 拉取消息| D
     E -->|5. 更新状态 running| C
     E -->|6. 执行AI逻辑| F[AI 服务]
     F -->|7. 返回结果| E
     E -->|8. 更新状态 done| C
     E -->|9. 发送结果| G[RocketMQ<br/>TopicResult]
-    G -->|10. 推送| H[下游服务<br/>Java/其他]
+    H[下游服务<br/>Java/其他] -->|10. 拉取结果| G
     A -->|11. 轮询查询状态| B
     B -->|12. 返回状态| A
 ```
@@ -211,7 +211,8 @@ graph LR
 - **Redis**: 只存储任务状态 (`queued` → `running` → `done`)
 - **TopicTest**: 请求 Topic，API Server 发送任务到此
 - **TopicResult**: 结果 Topic，Worker 发送处理结果到此
-- **下游服务**: 订阅 `TopicResult` 获取处理结果（如 Java 画像服务）
+- **Agent Worker**: 采用 pull 模式从 `TopicTest` 拉取任务进行处理
+- **下游服务**: 采用 pull 模式从 `TopicResult` 拉取处理结果（如 Java 画像服务）
 
 
 ## 🧪 测试
