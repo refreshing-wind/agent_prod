@@ -193,7 +193,7 @@ curl http://localhost:8000/tasks/550e8400-e29b-41d4-a716-446655440000
 
 ```mermaid
 graph LR
-    A[客户端/下游服务] -->|1. HTTP POST| B[API Server]
+    A[客户端] -->|1. HTTP POST| B[API Server]
     B -->|2. 写状态 queued| C[(Redis)]
     B -->|3. 发消息| D[RocketMQ<br/>TopicTest/Result]
     E[Agent Worker] -->|4. 拉取消息| D
