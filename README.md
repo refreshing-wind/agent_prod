@@ -27,8 +27,8 @@ agent_prod/
 │   ├── config.py          # 配置管理
 │   ├── models.py          # 数据模型
 │   └── redis_client.py    # Redis 客户端
-├── run_api.py             # API 服务启动入口
-├── run_worker.py          # Worker 服务启动入口
+├── run_tasks_api.py       # API 服务启动入口
+├── run_worker_api.py      # Worker 服务启动入口
 ├── .env                   # 环境变量配置
 └── pyproject.toml         # 项目依赖
 ```
@@ -138,7 +138,7 @@ sh mqadmin updateSubGroup -n 127.0.0.1:9876 -c DefaultCluster -g GID_AGENT_PYTHO
 **启动 API Server:**
 
 ```bash
-python run_api.py
+python run_tasks_api.py
 ```
 
 API 服务将在 `http://0.0.0.0:8000` 启动
@@ -146,7 +146,7 @@ API 服务将在 `http://0.0.0.0:8000` 启动
 **启动 Worker:**
 
 ```bash
-python run_worker.py
+python run_worker_api.py
 ```
 
 ## 📡 API 使用
@@ -363,4 +363,4 @@ lsof -ti:8000 | xargs kill -9
 
 ## 结束进程的命令
 
-pkill -f run_api && pkill -f run_worker
+pkill -f run_tasks_api && pkill -f run_worker_api

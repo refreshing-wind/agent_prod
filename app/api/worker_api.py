@@ -1,4 +1,4 @@
-"""Worker service entry point."""
+"""Worker API for managing the worker service."""
 import sys
 from pathlib import Path
 
@@ -15,25 +15,25 @@ async def main():
     """Start the ProxyAgent worker service."""
     setup_logging()
     import signal
-    
+
     # Create a stop event
     stop_event = asyncio.Event()
-    
+
     # Register signal handlers
     loop = asyncio.get_running_loop()
     def handle_signal(sig):
         print(f"DEBUG: Received signal {sig}")
         stop_event.set()
-        
+
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda s=sig: handle_signal(s))
-        
+
     import logging
-    logger = logging.getLogger("run_worker")
-    
+    logger = logging.getLogger("worker_api")
+
     try:
         await proxy_agent.startup()
-        
+
         # Wait for stop signal
         logger.warning("DEBUG: Waiting for stop signal...")
         while not stop_event.is_set():
