@@ -1,47 +1,49 @@
 # Agent Production - 异步任务处理系统
 
-基于 FastAPI + RocketMQ + Redis 的异步任务处理系统，用于处理 AI Agent 相关的耗时任务。
+基于 FastAPI + RocketMQ + Redis 的高并发异步任务处理系统，专为 AI Agent 耗时任务设计。
 
 ## 📋 项目简介
 
-这是一个生产级的异步任务处理系统，采用微服务架构设计：
+这是一个生产级的异步任务处理系统，采用微服务架构设计，旨在解决 AI Agent 场景下的长耗时任务处理问题。
 
-- **API Server**: 接收 HTTP 请求，快速返回任务 ID
-- **Agent Worker**: 后台消费 MQ 消息，执行耗时的 AI 处理逻辑
-- **消息队列**: 使用 RocketMQ 解耦 API 和 Worker
-- **缓存**: 使用 Redis 存储任务状态和结果
+- **高并发**: API 层与 Worker 层分离，通过 MQ 削峰填谷。
+- **可扩展**: Worker 采用插件式 Agent 设计，轻松扩展新的业务逻辑。
+- **可靠性**: 全链路状态追踪，Redis 缓存状态，RocketMQ 保证消息不丢失。
+- **流控**: Worker 内置信号量机制，精确控制并发任务数，防止过载。
 
 ## 🏗️ 项目结构
 
 ```
 agent_prod/
-├── api/                    # API 服务模块
-│   ├── __init__.py
-│   └── server.py          # FastAPI 应用
-├── worker/                # Worker 服务模块
-│   ├── __init__.py
-│   ├── consumer.py        # RocketMQ 消费者
-│   └── agent_logic.py     # 业务处理逻辑
-├── common/                # 共享模块
-│   ├── __init__.py
-│   ├── config.py          # 配置管理
-│   ├── models.py          # 数据模型
-│   └── redis_client.py    # Redis 客户端
-├── run_tasks_api.py       # API 服务启动入口
-├── run_worker_api.py      # Worker 服务启动入口
-├── .env                   # 环境变量配置
-└── pyproject.toml         # 项目依赖
+├── app/
+│   ├── api/                # API 接口定义
+│   │   ├── tasks_api.py    # 任务管理接口
+│   │   └── worker_api.py   # Worker 启动逻辑
+│   ├── core/               # 核心配置与工具
+│   ├── models/             # Pydantic 数据模型
+│   ├── self_agents/        # Agent 插件目录 (开发重心)
+│   │   ├── base_agent.py   # Agent 基类
+│   │   ├── mock_agent.py   # 示例 Agent
+│   │   └── __init__.py     # Agent 注册表
+│   ├── services/           # 基础设施服务 (Redis, MQ, ProxyAgent)
+│   ├── run_tasks_api.py    # API 服务入口
+│   └── run_worker_api.py   # Worker 服务入口
+├── test/                   # 测试脚本
+├── .env                    # 环境变量配置
+└── pyproject.toml          # 项目依赖管理
 ```
 
 ## 🚀 快速开始
 
-### 1. 环境要求
+### 1. 环境准备
 
-- Python 3.12+
-- Redis
-- RocketMQ 5.x
+- **Python 3.12+**
+- **Redis**: 用于存储任务状态
+- **RocketMQ 5.x**: 用于任务队列和结果分发
 
 ### 2. 安装依赖
+
+本项目使用 `uv` 进行包管理（也支持 pip）。
 
 ```bash
 # 使用 uv (推荐)
@@ -53,30 +55,36 @@ pip install -e .
 
 ### 3. 配置环境变量
 
-复制 `.env.example` 为 `.env` 并修改配置：
+复制 `.env.example` 为 `.env` 并按需修改：
 
 ```bash
 cp .env.example .env
 ```
 
-配置示例：
-
+主要配置项：
 ```env
-# Redis 配置
+# Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# RocketMQ 配置
+# RocketMQ
 MQ_ENDPOINT=127.0.0.1:8081
 MQ_TOPIC_REQUEST=TopicTest
 MQ_TOPIC_RESULT=TopicResult
 MQ_GROUP_AGENT=GID_AGENT_PYTHON
-MQ_ACCESS_KEY=User
-MQ_SECRET_KEY=Secret
 ```
 
-### 4. 配置 RocketMQ
+### 4. 初始化 RocketMQ 资源
 
+在启动服务前，必须在 RocketMQ 中创建好 Topic 和 Consumer Group。
+
+| 类型 | 名称 (默认) | 说明 |
+|------|------------|------|
+| **Topic** | `TopicTest` | **请求队列**: API 发送任务，Worker 消费 |
+| **Topic** | `TopicResult` | **结果队列**: Worker 发送结果，下游服务消费 |
+| **Group** | `GID_AGENT_PYTHON` | **Worker 组**: 用于 Worker 负载均衡消费 |
+
+可以通过 RocketMQ Dashboard 或 `mqadmin` 工具创建。
 #### Topic 和 Consumer Group 的区别
 
 **Topic (主题)**
@@ -138,32 +146,31 @@ sh mqadmin updateSubGroup -n 127.0.0.1:9876 -c DefaultCluster -g GID_AGENT_PYTHO
 **启动 API Server:**
 
 ```bash
-python run_tasks_api.py
+python app/run_tasks_api.py
 ```
-
-API 服务将在 `http://0.0.0.0:8000` 启动
+API 服务将在 `http://0.0.0.0:8000` 启动。
 
 **启动 Worker:**
 
 ```bash
-python run_worker_api.py
+python app/run_worker_api.py
 ```
+Worker 启动后会连接 RocketMQ 并开始监听任务。
 
 ## 📡 API 使用
 
 ### 创建任务
 
 ```bash
-curl -X POST http://localhost:8000/tasks \
+curl -X POST http://localhost:8000/api/v1/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "user123",
-    "content": "机械键盘降价了"
+    "content": "帮我分析这款智能手表"
   }'
 ```
 
 响应：
-
 ```json
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -174,11 +181,10 @@ curl -X POST http://localhost:8000/tasks \
 ### 查询任务状态
 
 ```bash
-curl http://localhost:8000/tasks/550e8400-e29b-41d4-a716-446655440000
+curl http://localhost:8000/api/v1/tasks/550e8400-e29b-41d4-a716-446655440000
 ```
 
 响应：
-
 ```json
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -186,8 +192,7 @@ curl http://localhost:8000/tasks/550e8400-e29b-41d4-a716-446655440000
   "result": null
 }
 ```
-
-> **注意**: 处理结果不再存储在 Redis 中，而是发送到 `TopicResult` 供客户端中的下游服务消费。
+> **注意**: API 仅返回任务状态 (`queued`, `running`, `done`, `failed`)。具体的**处理结果** (payload) 会发送到 `TopicResult` 供下游业务系统消费，不会存储在 Redis 中。
 
 ## 🔄 数据流程
 
@@ -195,24 +200,25 @@ curl http://localhost:8000/tasks/550e8400-e29b-41d4-a716-446655440000
 graph LR
     A[客户端] -->|1. HTTP POST| B[API Server]
     B -->|2. 写状态 queued| C[(Redis)]
-    B -->|3. 发消息| D[RocketMQ<br/>TopicTest/Result]
+    B -->|3. 发消息 TopicTest| D[RocketMQ]
+    
     E[Agent Worker] -->|4. 拉取消息| D
-    E -->|5. 更新状态 running| C
-    E -->|6. 执行AI逻辑| F[AI 服务]
-    F -->|7. 返回结果| E
-    E -->|8. 更新状态 done| C
-    E -->|9. 发送结果| D
-    A -->|10. 轮询查询状态| B
-    B -->|11. 返回状态| A
+    E -->|5.1 检查并发| E
+    E -->|5.2 更新状态 running| C
+    E -->|6. 执行 Agent 逻辑| E
+    E -->|7. 更新状态 done| C
+    E -->|8. 发结果 TopicResult| D
+    
+    F[下游服务] -.->|9. 消费结果| D
 ```
 
-**说明：**
-- **Redis**: 只存储任务状态 (`queued` → `running` → `done`)
-- **TopicTest**: 请求 Topic，API Server 发送任务到此
-- **TopicResult**: 结果 Topic，Worker 发送处理结果到此
-- **Agent Worker**: 采用 pull 模式从 `TopicTest` 拉取任务进行处理
-- **下游服务**: 采用 pull 模式从 `TopicResult` 拉取处理结果（如 Java 画像服务）
+## 🛠️ 二次开发指南
 
+### 添加新的 Agent
+
+所有的业务逻辑都封装在 Agent 中。要添加新的处理逻辑：
+
+1.  **新建 Agent 类**: 在 `app/self_agents/` 下创建一个新文件，继承 `BaseAgent`。
 
 ## 🧪 测试
 
@@ -263,96 +269,57 @@ Task ID: 71f550aa-aa95-4d8a-bcc4-5b51352334e0
 ============================================================
 ```
 
-### 手动测试
+    ```python
+    # app/self_agents/my_agent.py
+    from app.self_agents.base_agent import BaseAgent
 
-**1. 创建任务**
+    class MyAgent(BaseAgent):
+        def __init__(self):
+            super().__init__(agent_type="my_agent")
 
-```bash
-curl -X POST http://localhost:8000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user123",
-    "content": "机械键盘降价了"
-  }'
-```
+        async def prepare_input(self, payload):
+            return payload.get("content")
 
-**2. 查询状态**
+        async def process(self, task_id, prepared_input):
+            # 你的 AI 逻辑
+            return {"result": f"Processed: {prepared_input}"}
 
-```bash
-curl http://localhost:8000/tasks/<task_id>
-```
+        async def parse_response(self, raw_result):
+            return {"success": True, "data": raw_result}
+    ```
 
-**3. 订阅结果 Topic (Java 示例)**
+2.  **注册 Agent**: 修改 `app/self_agents/__init__.py`。
 
-```java
-import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
-import org.apache.rocketmq.client.consumer.listener.*;
-import org.apache.rocketmq.common.message.MessageExt;
+    ```python
+    from app.self_agents.my_agent import MyAgent
 
-public class ResultConsumer {
-    public static void main(String[] args) throws Exception {
-        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("GID_JAVA_SERVICE");
-        consumer.setNamesrvAddr("127.0.0.1:9876");
-        consumer.subscribe("TopicResult", "*");
-        
-        consumer.registerMessageListener(new MessageListenerConcurrently() {
-            @Override
-            public ConsumeConcurrentlyStatus consumeMessage(
-                List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
-                for (MessageExt msg : msgs) {
-                    String body = new String(msg.getBody());
-                    System.out.println("收到结果: " + body);
-                    // 解析 JSON 并处理结果
-                }
-                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
-            }
-        });
-        
-        consumer.start();
-        System.out.println("Java 服务已启动，等待结果...");
+    _AGENT_REGISTRY = {
+        "mock_agent": MockAgent,
+        "my_agent": MyAgent,  # 新增
     }
-}
+    ```
+
+3.  **调用**: 创建任务时，在 payload 中指定 `agent_type` (目前默认为 `mock_agent`，未来可扩展参数支持动态指定)。
+
+## 🧪 测试
+
+项目包含一个完整的集成测试脚本，模拟了"提交任务 -> 轮询状态 -> 接收结果"的全流程。
+
+```bash
+python test/test_full_flow.py
+# 注意：你需要先启动 API 和 MQ 才能运行此测试
 ```
-
-## 🛠️ 开发指南
-
-### 添加新的业务逻辑
-
-修改 `worker/agent_logic.py` 中的 `core_agent_logic` 函数：
-
-```python
-async def core_agent_logic(task_id: str, payload: str) -> TaskResult:
-    # 1. 状态检查
-    # 2. 更新为 running
-    # 3. 执行你的业务逻辑
-    # 4. 生成结果
-    # 5. 更新状态为 done 并返回结果
-    return TaskResult(...)
-```
-
-### 修改数据模型
-
-在 `common/models.py` 中定义新的 Pydantic 模型：
-
-```python
-class YourModel(BaseModel):
-    field1: str
-    field2: int
-```
-
-## 📝 注意事项
-
-1. **Worker 启动延迟**: Worker 启动后需要等待 5-10 秒让 RocketMQ 分配消息队列
-2. **幂等性**: 业务逻辑已实现幂等性检查，重复消费不会重复处理
-3. **优雅关闭**: 使用 Ctrl+C 停止服务时会自动清理资源
 
 ## 🐛 常见问题
 
-### Worker 收不到消息？
+**Q: Worker 启动成功但收不到消息？**
+A: 请确保：
+1. RocketMQ 的 Topic 和 Consumer Group 已正确创建。
+2. 确保 API 和 Worker 连接的是同一个 Nameserver。
+3. 如果是 Docker 环境，注意 Broker IP 暴露问题。
 
-1. 检查 RocketMQ 是否正常运行
-2. 确认 Topic 和 Consumer Group 已创建
-3. Worker 启动后等待 10 秒再发送测试请求
+**Q: 如何调整并发数？**
+A: 在 `app/services/proxy_agent.py` 中初始化 `ProxyAgent` 时调整 `max_concurrent_tasks` 参数（默认 10）。
 
 ### 端口被占用？
 
